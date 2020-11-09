@@ -24,10 +24,6 @@ public class Main {
 
     private final JFrame debugFrame = new JFrame("Debug");
 
-    public static void main(String[] args) {
-        new Main();
-    }
-
     private final Track track = new Track();
 
     private Car manual;
@@ -139,4 +135,9 @@ public class Main {
             e.printStackTrace();
         }
     }
+
+    public static void main(String[] args) {
+        new Main();
+    }
+
 }

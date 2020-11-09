@@ -3,8 +3,8 @@ package nl.pvanassen.raceai;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.Line2D;
-import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Function;
@@ -52,6 +52,7 @@ public class Track extends JPanel {
             checkpoints.forEach(((Graphics2D) g)::draw);
         }
 
+        List<Car> cars = new ArrayList<>(this.cars);
         for (Car car : cars) {
             car.draw(graphics2D);
             if (Main.DEBUG) {

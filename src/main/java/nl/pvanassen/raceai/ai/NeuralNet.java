@@ -1,12 +1,10 @@
 package nl.pvanassen.raceai.ai;
 
+import com.google.gson.Gson;
 import lombok.Getter;
-import lombok.ToString;
 
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@ToString
 public class NeuralNet {
 
     private static final AtomicInteger netNumber = new AtomicInteger(0);
@@ -25,7 +23,6 @@ public class NeuralNet {
     private final String id;
 
     NeuralNet(int input, int hidden, int output, int hiddenLayers, String id) {
-        System.out.println("Creating net: " + id);
         this.id = id;
         iNodes = input;
         hNodes = hidden;
@@ -74,15 +71,12 @@ public class NeuralNet {
         return clone;
     }
 
-    public void load(Matrix[] weight) {
-        for (int i = 0; i < weights.length; i++) {
-            weights[i] = weight[i];
-        }
+    String toJson() {
+        return new Gson().toJson(this);
     }
 
-    public Matrix[] pull() {
-        Matrix[] model = weights.clone();
-        return model;
+    static NeuralNet fromJson(String json) {
+        return new Gson().fromJson(json, NeuralNet.class);
     }
 
     public NeuralNetDebugInfo getDebugInfo() {
@@ -94,109 +88,4 @@ public class NeuralNet {
                 .weights(weights)
                 .build();
     }
-
-//    public void show(PApplet parent, float x, float y, float w, float h, float[] vision, float[] decision) {
-//        float space = 5;
-//        float nSize = (h - (space * (iNodes - 2))) / iNodes;
-//        float nSpace = (w - (weights.length * nSize)) / weights.length;
-//        float hBuff = (h - (space * (hNodes - 1)) - (nSize * hNodes)) / 2;
-//        float oBuff = (h - (space * (oNodes - 1)) - (nSize * oNodes)) / 2;
-//
-//        int maxIndex = 0;
-//        for (int i = 1; i < decision.length; i++) {
-//            if (decision[i] > decision[maxIndex]) {
-//                maxIndex = i;
-//            }
-//        }
-//
-//        int lc = 0;  //Layer Count
-//
-//        //DRAW NODES
-//        for (int i = 0; i < iNodes; i++) {  //DRAW INPUTS
-//            if (vision[i] != 0) {
-//                parent.fill(0, 255, 0);
-//            } else {
-//                parent.fill(255);
-//            }
-//            parent.stroke(0);
-//            parent.ellipseMode(PConstants.CORNER);
-//            parent.ellipse(x, y + (i * (nSize + space)), nSize, nSize);
-//            parent.textSize(nSize / 2);
-//            parent.textAlign(PConstants.CENTER, PConstants.CENTER);
-//            parent.fill(0);
-//            parent.text(i, x + (nSize / 2), y + (nSize / 2) + (i * (nSize + space)));
-//        }
-//
-//        lc++;
-//
-//        for (int a = 0; a < hLayers; a++) {
-//            for (int i = 0; i < hNodes; i++) {  //DRAW HIDDEN
-//                parent.fill(255);
-//                parent.stroke(0);
-//                parent.ellipseMode(PConstants.CORNER);
-//                parent.ellipse(x + (lc * nSize) + (lc * nSpace), y + hBuff + (i * (nSize + space)), nSize, nSize);
-//            }
-//            lc++;
-//        }
-//
-//        for (int i = 0; i < oNodes; i++) {  //DRAW OUTPUTS
-//            if (i == maxIndex) {
-//                parent.fill(0, 255, 0);
-//            } else {
-//                parent.fill(255);
-//            }
-//            parent.stroke(0);
-//            parent.ellipseMode(PConstants.CORNER);
-//            parent.ellipse(x + (lc * nSpace) + (lc * nSize), y + oBuff + (i * (nSize + space)), nSize, nSize);
-//        }
-//
-//        lc = 1;
-//
-//        //DRAW WEIGHTS
-//        for (int i = 0; i < weights[0].rows; i++) {  //INPUT TO HIDDEN
-//            for (int j = 0; j < weights[0].cols - 1; j++) {
-//                if (weights[0].matrix[i][j] < 0) {
-//                    parent.stroke(255, 0, 0);
-//                } else {
-//                    parent.stroke(0, 0, 255);
-//                }
-//                parent.line(x + nSize, y + (nSize / 2) + (j * (space + nSize)), x + nSize + nSpace, y + hBuff + (nSize / 2) + (i * (space + nSize)));
-//            }
-//        }
-//
-//        lc++;
-//
-//        for (int a = 1; a < hLayers; a++) {
-//            for (int i = 0; i < weights[a].rows; i++) {  //HIDDEN TO HIDDEN
-//                for (int j = 0; j < weights[a].cols - 1; j++) {
-//                    if (weights[a].matrix[i][j] < 0) {
-//                        parent.stroke(255, 0, 0);
-//                    } else {
-//                        parent.stroke(0, 0, 255);
-//                    }
-//                    parent.line(x + (lc * nSize) + ((lc - 1) * nSpace), y + hBuff + (nSize / 2) + (j * (space + nSize)), x + (lc * nSize) + (lc * nSpace), y + hBuff + (nSize / 2) + (i * (space + nSize)));
-//                }
-//            }
-//            lc++;
-//        }
-//
-//        for (int i = 0; i < weights[weights.length - 1].rows; i++) {  //HIDDEN TO OUTPUT
-//            for (int j = 0; j < weights[weights.length - 1].cols - 1; j++) {
-//                if (weights[weights.length - 1].matrix[i][j] < 0) {
-//                    parent.stroke(255, 0, 0);
-//                } else {
-//                    parent.stroke(0, 0, 255);
-//                }
-//                parent.line(x + (lc * nSize) + ((lc - 1) * nSpace), y + hBuff + (nSize / 2) + (j * (space + nSize)), x + (lc * nSize) + (lc * nSpace), y + oBuff + (nSize / 2) + (i * (space + nSize)));
-//            }
-//        }
-//
-//        parent.fill(0);
-//        parent.textSize(15);
-//        parent.textAlign(PConstants.CENTER, PConstants.CENTER);
-//        parent.text("U", x + (lc * nSize) + (lc * nSpace) + nSize / 2, y + oBuff + (nSize / 2));
-//        parent.text("D", x + (lc * nSize) + (lc * nSpace) + nSize / 2, y + oBuff + space + nSize + (nSize / 2));
-//        parent.text("L", x + (lc * nSize) + (lc * nSpace) + nSize / 2, y + oBuff + (2 * space) + (2 * nSize) + (nSize / 2));
-//        parent.text("R", x + (lc * nSize) + (lc * nSpace) + nSize / 2, y + oBuff + (3 * space) + (3 * nSize) + (nSize / 2));
-//    }
 }

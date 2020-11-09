@@ -2,11 +2,14 @@ package nl.pvanassen.raceai.ai;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.SneakyThrows;
 import nl.pvanassen.raceai.Accelerate;
 import nl.pvanassen.raceai.Car;
 import nl.pvanassen.raceai.CarMetrics;
 import nl.pvanassen.raceai.Turn;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -36,7 +39,13 @@ public class CarAI {
         this.car = carProducer.apply(this.id);
         brain = new NeuralNet(5, 9, 9, 2, "net-" + car.getId());
         System.out.println("CarAI: " + id + ", car: " + car.getId() + ", brain: " + brain.getId());
-        System.out.println(brain.toString());
+    }
+
+    public CarAI(Function<String, Car> carProducer, String id, String json) {
+        this.carProducer = carProducer;
+        this.id = id;
+        this.car = carProducer.apply(this.id);
+        this.brain = NeuralNet.fromJson(json);
     }
 
     private CarAI(Function<String, Car> carProducer, NeuralNet brain) {
@@ -44,7 +53,6 @@ public class CarAI {
         this.id = "CarAI-" + carNumber.getAndIncrement();
         this.car = carProducer.apply(this.id);
         this.brain = brain;
-        System.out.println(brain.toString());
     }
 
     private CarAI(Function<String, Car> carProducer, NeuralNet brain, String id) {
@@ -52,7 +60,6 @@ public class CarAI {
         this.car = carProducer.apply(id);
         this.brain = brain;
         this.id = id;
-        System.out.println(brain.toString());
     }
 
     public boolean isAlive() {
@@ -118,5 +125,14 @@ public class CarAI {
             System.out.println("Car " + id + ", score: " + car.getScore());
         }
         return fitness;
+    }
+
+    @SneakyThrows
+    public void saveBrain() {
+        File file = new File(id + "-" + System.currentTimeMillis() + ".json");
+        try (FileWriter fileWriter = new FileWriter(file)) {
+            fileWriter.write(brain.toJson());
+            fileWriter.flush();
+        }
     }
 }

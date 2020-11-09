@@ -45,16 +45,6 @@ public class Matrix {
         }
         return target;
     }
-//
-//    public void output() {
-//        for (int i = 0; i < rows; i++) {
-//            for (int j = 0; j < cols; j++) {
-//                PApplet.print(matrix[i][j] + " ");
-//            }
-//            PApplet.println();
-//        }
-//        PApplet.println();
-//    }
 
     public Matrix dot(Matrix n) {
         double[][] matrix = createEmptyMatrix(rows, n.cols);

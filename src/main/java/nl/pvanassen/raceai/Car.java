@@ -5,6 +5,7 @@ import lombok.Getter;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Line2D;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.util.function.Function;
 
@@ -15,15 +16,14 @@ import static nl.pvanassen.raceai.ImageHelper.loadImage;
 public class Car implements Drawable {
 
     private static final BufferedImage CAR = loadImage("car.png");
+
     private static final BufferedImage CRASHED = loadImage("crashed.png");
-    private static final BufferedImage WINNER = loadImage("winner.png");
+
     private static final double MAX_SPEED = 100;
     private static final double MAX_ACCELERATION = 0.1;
     private static final double MAX_DECELERATION = 0.2;
     private static final double MAX_TURN = 4;
     private static final int DEFAULT_LINE_OF_SIGHT = 1000;
-
-    private final Point startLocation;
 
     private final List<Line2D> checkpoints;
 
@@ -44,8 +44,6 @@ public class Car implements Drawable {
     @Getter
     private double score;
 
-    private boolean started;
-
     private Line2D.Double lineOfSightRight;
 
     private Line2D.Double lineOfSightAhead;
@@ -58,7 +56,7 @@ public class Car implements Drawable {
 
     private double distanceLeft;
 
-    private long start = System.currentTimeMillis();
+    private final long start = System.currentTimeMillis();
 
     @Getter
     private long lifetime;
@@ -67,7 +65,6 @@ public class Car implements Drawable {
     private final String id;
 
     Car(String id, Point startLocation, List<Line2D> checkpoints) {
-        this.startLocation = startLocation;
         this.checkpoints = checkpoints;
 
         x = startLocation.x;
@@ -122,7 +119,7 @@ public class Car implements Drawable {
 
     private void draw(Graphics2D graphics, BufferedImage image) {
         AffineTransform at = new AffineTransform();
-        at.translate(x + 10, y + 10);
+        at.translate(x, y);
         at.rotate(toRadians(direction));
         graphics.drawImage(image, at, null);
 
@@ -130,21 +127,26 @@ public class Car implements Drawable {
         at.translate(0, 5);
         shape = at.createTransformedShape(rectangle);
 
-        lineOfSightRight = getLine(direction + 45);
-        lineOfSightAhead = getLine(direction);
-        lineOfSightLeft = getLine(direction - 45);
+        at.translate(10, 5);
+
+        lineOfSightRight = getLine(45, at);
+        lineOfSightAhead = getLine(0, at);
+        lineOfSightLeft = getLine(-45, at);
 
         if (Main.DEBUG) {
             graphics.setColor(Color.BLUE);
-            graphics.setFont(new Font("TimesRoman", Font.BOLD, 12));
+            graphics.setFont(graphics.getFont().deriveFont(16f));
             graphics.drawString(id, (int) x, (int) y);
         }
     }
 
-    private Line2D.Double getLine(double direction) {
-        double endX = x + cos(toRadians(direction)) * DEFAULT_LINE_OF_SIGHT;
-        double endY = y + sin(toRadians(direction)) * DEFAULT_LINE_OF_SIGHT;
-        return new Line2D.Double(x, y, endX, endY);
+    private Line2D.Double getLine(double direction, AffineTransform at) {
+        double endX = cos(toRadians(direction)) * DEFAULT_LINE_OF_SIGHT;
+        double endY = sin(toRadians(direction)) * DEFAULT_LINE_OF_SIGHT;
+        Line2D.Double line = new Line2D.Double(0, 0, endX, endY);
+        Point2D.Double pt1 = (Point2D.Double)at.transform(line.getP1(), null);
+        Point2D.Double pt2 = (Point2D.Double)at.transform(line.getP2(), null);
+        return new Line2D.Double(pt1, pt2);
     }
 
     public void action(Accelerate accelerate, Turn turn) {
@@ -152,7 +154,6 @@ public class Car implements Drawable {
             return;
         }
         if (accelerate == Accelerate.ACCELERATE) {
-            started = true;
             speed = Math.min(MAX_SPEED, speed + MAX_ACCELERATION);
         }
         if (accelerate == Accelerate.DECELERATE) {

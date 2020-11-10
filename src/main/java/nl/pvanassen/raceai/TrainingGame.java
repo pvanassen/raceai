@@ -1,5 +1,6 @@
 package nl.pvanassen.raceai;
 
+import lombok.SneakyThrows;
 import nl.pvanassen.raceai.ai.CarAI;
 import nl.pvanassen.raceai.ai.Population;
 
@@ -29,10 +30,12 @@ public class TrainingGame extends Game {
         });
     }
 
+    @SneakyThrows
     protected void tick() {
         population.tick();
         if (population.done()) {
             population.getBest().ifPresent(CarAI::saveBrain);
+            Thread.sleep(1000);
             System.out.println("Done, next round!");
             track.clear();
             population.naturalSelection();

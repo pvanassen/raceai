@@ -6,6 +6,7 @@ import nl.pvanassen.raceai.Global;
 import nl.pvanassen.raceai.Track;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ForkJoinTask;
@@ -107,16 +108,19 @@ public class Population {
                 .map(CarAI::cloneForReplay);
     }
 
-    public CarAI selectRandomParent() {  //selects a random number in range of the fitnesssum and if a car falls in that range then select it
-        double rand = ThreadLocalRandom.current().nextDouble() * calculateFitnessSum();
-        float summation = 0;
-        for (CarAI car : cars) {
-            summation += car.calculateFitness();
-            if (summation > rand) {
-                return car;
-            }
-        }
-        return cars.get(0);
+    private CarAI selectFromTop10() {
+        return cars.stream()
+                .sorted(Comparator.comparing(CarAI::calculateFitness))
+                .limit((int) (cars.size() * 0.1f))
+                .min((o1, o2) -> ThreadLocalRandom.current().nextInt(3) - 1)
+                .orElseThrow();
+    }
+
+    private CarAI selectRandomParent() {  //selects a random number in range of the fitnesssum and if a car falls in that range then select it
+        return cars.stream()
+                .sorted(Comparator.comparing(CarAI::calculateFitness))
+                .min((o1, o2) -> ThreadLocalRandom.current().nextInt(3) - 1)
+                .orElseThrow();
     }
 
     public void naturalSelection() {
@@ -135,6 +139,8 @@ public class Population {
         else {
             mutationRate = 0.01f;
         }
+
+        // Take top 10% and cross breed?
 
         for (int i = 1; i < cars.size(); i++) {
             CarAI child = selectRandomParent().crossoverAndMutate(selectRandomParent(), mutationRate);

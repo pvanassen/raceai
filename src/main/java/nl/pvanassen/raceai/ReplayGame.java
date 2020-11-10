@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 public class ReplayGame extends Game {
 
-    private final JFrame debugFrame = new JFrame("Debug");
+    private final DebugFrame debugFrame = new DebugFrame();
 
     private CarAI carAI;
 
@@ -25,12 +25,8 @@ public class ReplayGame extends Game {
         }
 
         EventQueue.invokeLater(() -> {
-            if (Main.DEBUG) {
-                debugFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-                debugFrame.setLocationRelativeTo(trackFrame);
-                debugFrame.add(new DebugPanel(carAI));
-                debugFrame.pack();
-                debugFrame.setVisible(true);
+            if (Global.DEBUG) {
+                debugFrame.replaceCar(carAI);
             }
         });
     }
@@ -42,15 +38,9 @@ public class ReplayGame extends Game {
             Thread.sleep(2000);
             track.clear();
             carAI = carAI.cloneForReplay();
-            if (Main.DEBUG) {
+            if (Global.DEBUG) {
                 EventQueue.invokeLater(() -> {
-                    for (int i = 0; i < debugFrame.getComponents().length; i++) {
-                        if (debugFrame.getComponent(i) instanceof DebugPanel) {
-                            debugFrame.remove(i);
-                            break;
-                        }
-                    }
-                    debugFrame.add(new DebugPanel(carAI));
+                    debugFrame.replaceCar(carAI);
                 });
             }
         }

@@ -1,17 +1,18 @@
 package nl.pvanassen.raceai.ai;
 
 import com.google.common.collect.Lists;
+import lombok.SneakyThrows;
+import nl.pvanassen.raceai.Global;
 import nl.pvanassen.raceai.Track;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 public class Population {
-
-    private final ForkJoinPool pool = new ForkJoinPool(Runtime.getRuntime().availableProcessors() * 2);
 
     private final List<CarAI> cars;
 
@@ -21,6 +22,8 @@ public class Population {
     private int gen = 0;
 
     private double bestFitness = 0;
+
+    private int roundsWithNoFitnessIncrease = 0;
 
     public Population(Track track, int size) {
         cars = new ArrayList<>(size);
@@ -38,12 +41,18 @@ public class Population {
         return true;
     }
 
+    @SneakyThrows
     public void tick() {
         int partitionSize = (int)Math.ceil(cars.size() / (float)Runtime.getRuntime().availableProcessors());
-        Lists.partition(cars, partitionSize)
+        List<ForkJoinTask<?>> tasks = Lists.partition(cars, partitionSize)
                 .stream()
                 .map(Task::new)
-                .forEach(pool::submit);
+                .map(Global.POOL::submit)
+                .collect(Collectors.toList());
+
+        for (ForkJoinTask<?> task : tasks) {
+            task.join();
+        }
     }
 
     public CarAI getRandomCar() {
@@ -59,9 +68,14 @@ public class Population {
 
         @Override
         public void run() {
-            cars.stream()
-                .filter(CarAI::isAlive)
-                .forEach(CarAI::calculate);
+            try {
+                cars.stream()
+                        .filter(CarAI::isAlive)
+                        .forEach(CarAI::calculate);
+            }
+            catch (RuntimeException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -81,7 +95,13 @@ public class Population {
             bestFitness = max;
             bestScore = (int)cars.get(maxIndex).getScore();
             bestCar = cars.get(maxIndex);
+            roundsWithNoFitnessIncrease = 0;
+            System.out.println("Fitness increase!");
             System.out.println("New best car: " + bestCar.getId());
+        }
+        else {
+            System.out.println("No fitness increase");
+            roundsWithNoFitnessIncrease++;
         }
         return Optional.ofNullable(bestCar)
                 .map(CarAI::cloneForReplay);
@@ -102,13 +122,22 @@ public class Population {
     public void naturalSelection() {
         List<CarAI> newCars = new ArrayList<>(cars.size());
 
-        double oldFitness = bestFitness;
-
         newCars.add(getBest()
                 .orElseGet(this::getRandomCar));
 
+        float mutationRate;
+        if (roundsWithNoFitnessIncrease > 10) {
+            mutationRate = 0.5f;
+        }
+        else if (roundsWithNoFitnessIncrease > 5) {
+            mutationRate = 0.1f;
+        }
+        else {
+            mutationRate = 0.01f;
+        }
+
         for (int i = 1; i < cars.size(); i++) {
-            CarAI child = selectRandomParent().crossoverAndMutate(selectRandomParent());
+            CarAI child = selectRandomParent().crossoverAndMutate(selectRandomParent(), mutationRate);
             newCars.add(child);
         }
         cars.clear();

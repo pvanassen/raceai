@@ -13,11 +13,13 @@ import static java.lang.Math.*;
 import java.util.List;
 import static nl.pvanassen.raceai.ImageHelper.loadImage;
 
-public class Car implements Drawable {
+public class Car {
 
     private static final BufferedImage CAR = loadImage("car.png");
 
     private static final BufferedImage CRASHED = loadImage("crashed.png");
+
+    private static final BufferedImage BEST = loadImage("winner.png");
 
     private static final double MAX_SPEED = 100;
     private static final double MAX_ACCELERATION = 0.1;
@@ -64,37 +66,38 @@ public class Car implements Drawable {
     @Getter
     private final String id;
 
-    Car(String id, Point startLocation, List<Line2D> checkpoints) {
+    private final boolean best;
+
+    Car(CarType carType, Point startLocation, List<Line2D> checkpoints) {
         this.checkpoints = checkpoints;
 
         x = startLocation.x;
         y = startLocation.y;
-        this.id = "Car-" + id;
+        this.id = "Car-" + carType.getId();
+        this.best = carType.isBest();
     }
 
-    @Override
-    public void draw(Graphics2D graphics) {
+    public void tick(BufferedImage buffer) {
+        Graphics2D graphics = (Graphics2D)buffer.getGraphics();
+
         if (crashed) {
             draw(graphics, CRASHED);
             return;
         }
 
         if (System.currentTimeMillis() - start > 1000 && score == 0) {
-            System.out.println("Timed out, no score: " + id);
             crashed();
             draw(graphics, CRASHED);
             return;
         }
 
         if (System.currentTimeMillis() - start > 2000 && speed == 0) {
-            System.out.println("Timed out, no movement: " + id);
             crashed();
             draw(graphics, CRASHED);
             return;
         }
 
         if (System.currentTimeMillis() - start > 60000) {
-            System.out.println("Driven long enough: " + id);
             crashed();
             draw(graphics, CRASHED);
             return;
@@ -103,7 +106,6 @@ public class Car implements Drawable {
         if (speed > 0) {
             for (Line2D checkpoint : checkpoints) {
                 if (checkpoint.ptLineDist(x, y) < 0.1d) {
-                    System.out.println("Car passing checkpoint: " + id);
                     score += 500;
                 }
             }
@@ -112,9 +114,13 @@ public class Car implements Drawable {
         x += speed * sin(toRadians(90 - direction));
         y += speed * cos(toRadians(90 - direction));
 
-        score += speed;
-
-        draw(graphics, CAR);
+        score += (speed * 100);
+        if (best) {
+            draw(graphics, BEST);
+        }
+        else {
+            draw(graphics, CAR);
+        }
     }
 
     private void draw(Graphics2D graphics, BufferedImage image) {
@@ -127,13 +133,18 @@ public class Car implements Drawable {
         at.translate(0, 5);
         shape = at.createTransformedShape(rectangle);
 
+        if (Global.DEBUG) {
+            graphics.setColor(Color.BLUE);
+            graphics.draw(shape);
+        }
+
         at.translate(10, 5);
 
         lineOfSightRight = getLine(45, at);
         lineOfSightAhead = getLine(0, at);
         lineOfSightLeft = getLine(-45, at);
 
-        if (Main.DEBUG) {
+        if (Global.DEBUG) {
             graphics.setColor(Color.BLUE);
             graphics.setFont(graphics.getFont().deriveFont(16f));
             graphics.drawString(id, (int) x, (int) y);

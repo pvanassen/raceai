@@ -13,20 +13,18 @@ import java.util.concurrent.TimeUnit;
 
 public class TrainingGame extends Game {
 
-    private final JFrame debugFrame = new JFrame("Debug");
+    private static final int POPULATION_SIZE = 50;
+
+    private final DebugFrame debugFrame = new DebugFrame();
 
     private final Population population;
 
     private TrainingGame() {
         super(Modus.TRAINING);
-        population = new Population(track, 10);
+        population = new Population(track, POPULATION_SIZE);
         EventQueue.invokeLater(() -> {
-            if (Main.DEBUG) {
-                debugFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-                debugFrame.setLocationRelativeTo(trackFrame);
-                debugFrame.add(new DebugPanel(population.getFirstCar()));
-                debugFrame.pack();
-                debugFrame.setVisible(true);
+            if (Global.DEBUG) {
+                debugFrame.replaceCar(population.getFirstCar());
             }
         });
     }
@@ -38,18 +36,13 @@ public class TrainingGame extends Game {
             System.out.println("Done, next round!");
             track.clear();
             population.naturalSelection();
-            if (Main.DEBUG) {
+            if (Global.DEBUG) {
                 EventQueue.invokeLater(() -> {
-                    for (int i = 0; i < debugFrame.getComponents().length; i++) {
-                        if (debugFrame.getComponent(i) instanceof DebugPanel) {
-                            debugFrame.remove(i);
-                            break;
-                        }
-                    }
-                    debugFrame.add(new DebugPanel(population.getFirstCar()));
+                    debugFrame.replaceCar(population.getFirstCar());
                 });
             }
         }
+        debugFrame.repaint();
     }
 
     public static void main(String[] args) {

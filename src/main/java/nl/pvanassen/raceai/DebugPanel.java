@@ -24,19 +24,28 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
 
     private final int y = 0;
 
-    private final int w = 600;
+    private final int h;
 
-    private final int h = 790;
+    private final int w;
 
-    private final BufferedImage buffer = new BufferedImage(w, h, TYPE_INT_RGB);
+    private final BufferedImage buffer;
+
+    private final int nSize = 60;
 
     private final Map<Integer, String> inputLookupMap = Map.of(0, "Speed", 1, "Dir.", 2, "Dist. right", 3, "Dist. ahead", 4, "Dist. left");
 
     DebugPanel(CarAI carAI) {
         this.carAI = carAI;
         this.neuralNet = carAI.getBrain();
-        setPreferredSize(new Dimension(w, h));
+
+        NeuralNetDebugInfo neuralNetDebugInfo = neuralNet.getDebugInfo();
+        int maxNodes = max(neuralNetDebugInfo.getHNodes(), neuralNetDebugInfo.getINodes(), neuralNetDebugInfo.getONodes());
+
+        setPreferredSize(new Dimension((2 + neuralNetDebugInfo.getHLayers()) * (nSize + 25), maxNodes * (nSize + 25)));
+        this.w = (int)getPreferredSize().getWidth();
+        this.h = (int)getPreferredSize().getHeight();
         carAI.setVisionDecisionConsumer(this);
+        buffer = new BufferedImage(w, h, TYPE_INT_RGB);
     }
 
     @Override
@@ -51,8 +60,8 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
 
         float space = 5;
         int maxNodes = max(iNodes, hNodes, oNodes);
-        int nSize = (int)((h - (space * (maxNodes - 2))) / maxNodes);
         float nSpace = (w - ((weights.length + 1) * nSize)) / (float)(weights.length + 1);
+        float iBuff = (h - (space * (hNodes - 1)) - (nSize * iNodes)) / 2f;
         float hBuff = (h - (space * (hNodes - 1)) - (nSize * hNodes)) / 2f;
         float oBuff = (h - (space * (oNodes - 1)) - (nSize * oNodes)) / 2f;
 
@@ -73,10 +82,10 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
             } else {
                 parent.setColor(Color.WHITE);
             }
-            parent.fillOval(x, (int)(y + (i * (nSize + space))), nSize, nSize);
+            parent.fillOval(x, (int)(iBuff  + y + (i * (nSize + space))), nSize, nSize);
             parent.setFont(parent.getFont().deriveFont(12f));
             parent.setColor(Color.BLACK);
-            parent.drawString(inputLookupMap.get(i), -25 + x + (nSize / 2f), 5 + y + (nSize / 2f) + (i * (nSize + space)));
+            parent.drawString(inputLookupMap.get(i), -25 + x + (nSize / 2f), iBuff + 5 + y + (nSize / 2f) + (i * (nSize + space)));
         }
 
         lc++;
@@ -108,7 +117,7 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
                 } else {
                     parent.setColor(Color.BLUE);
                 }
-                Line2D line = new Line2D.Float(x + nSize, y + (nSize / 2f) + (j * (space + nSize)), x + nSize + nSpace, y + hBuff + (nSize / 2f) + (i * (space + nSize)));
+                Line2D line = new Line2D.Float(x + nSize, iBuff + y + (nSize / 2f) + (j * (space + nSize)), x + nSize + nSpace, y + hBuff + (nSize / 2f) + (i * (space + nSize)));
                 parent.draw(line);
             }
         }
@@ -169,7 +178,6 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
         parent.drawString("Straight", textX, 10 + y + oBuff + (7 * space) + (7 * nSize) + (nSize / 2f));
         parent.drawString("Dec", textX, -10 + y + oBuff + (8 * space) + (8 * nSize) + (nSize / 2f));
         parent.drawString("Right", textX, 10 + y + oBuff + (8 * space) + (8 * nSize) + (nSize / 2f));
-
 
         repaint();
     }

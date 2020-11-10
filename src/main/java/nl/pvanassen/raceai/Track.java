@@ -1,5 +1,11 @@
 package nl.pvanassen.raceai;
 
+import com.google.common.collect.Lists;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
+import nl.pvanassen.raceai.ai.Population;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.Line2D;
@@ -7,8 +13,12 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ForkJoinTask;
 import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import static lombok.AccessLevel.PRIVATE;
 import static nl.pvanassen.raceai.ImageHelper.loadImage;
 
 public class Track extends JPanel {
@@ -30,89 +40,127 @@ public class Track extends JPanel {
             new Line2D.Float(600, 180, 575, 225),
             new Line2D.Float(600, 270, 575, 320));
 
+    private final BufferedImage buffer;
+
     Track() {
         setPreferredSize(new Dimension(mask.getWidth(), mask.getHeight()));
         setDoubleBuffered(true);
+        buffer = new BufferedImage(mask.getWidth(), mask.getHeight(), BufferedImage.TYPE_INT_ARGB);
     }
 
-    public Car createCar(String id) {
+    public Car createCar(CarType id) {
         Car car = new Car(id, START_LOCATION, checkpoints);
         cars.add(car);
         return car;
     }
 
-    @Override
-    public void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        Graphics2D graphics2D = (Graphics2D)g;
+    @SneakyThrows
+    public void tick() {
+        Graphics2D graphics2D = (Graphics2D)buffer.getGraphics();
         Dimension size = getSize();
-        g.drawImage(track, 0, 0,size.width, size.height,0, 0, track.getWidth(), track.getHeight(), null);
-        if (Main.DEBUG) {
-            g.setColor(Color.BLUE);
-            checkpoints.forEach(((Graphics2D) g)::draw);
+        graphics2D.drawImage(track, 0, 0,size.width, size.height,0, 0, track.getWidth(), track.getHeight(), null);
+        if (Global.DEBUG) {
+            graphics2D.setColor(Color.BLUE);
+            checkpoints.forEach(graphics2D::draw);
         }
 
-        List<Car> cars = new ArrayList<>(this.cars);
-        for (Car car : cars) {
-            car.draw(graphics2D);
-            if (Main.DEBUG) {
-                graphics2D.setColor(Color.BLUE);
-                graphics2D.draw(car.getShape());
-            }
+        int partitionSize = (int)Math.ceil(cars.size() / (float)Runtime.getRuntime().availableProcessors());
+        List<ForkJoinTask<?>> tasks = Lists.partition(cars, partitionSize)
+                .stream()
+                .map(Task.create(mask, graphics2D, buffer))
+                .map(Global.POOL::submit)
+                .collect(Collectors.toList());
 
-            if (car.isCrashed()) {
-                continue;
-            }
-
-            // Collision detection
-            if (doCollisionDetection(car)) {
-                continue;
-            }
-
-            car.calculateDistances(calculateDistance(graphics2D, mask));
+        for (ForkJoinTask<?> task : tasks) {
+            task.join();
         }
     }
 
-    private boolean doCollisionDetection(Car car) {
-        for (int x = (int)car.getShape().getBounds().getX(); x != (int)car.getShape().getBounds().getX() + car.getShape().getBounds().getWidth(); x++) {
-            for (int y = (int)car.getShape().getBounds().getY(); y != (int)car.getShape().getBounds().getY() + car.getShape().getBounds().getHeight(); y++) {
-                if (car.getShape().contains(x, y)) {
-                    if (mask.getRGB(x, y) != Color.WHITE.getRGB()) {
-                        car.crashed();
-                        return true;
+    @RequiredArgsConstructor(access = PRIVATE)
+    private static class Task implements Runnable {
+        private final BufferedImage mask;
+
+        private final Graphics2D graphics2D;
+
+        private final BufferedImage buffer;
+
+        private final List<Car> cars;
+
+        static Function<List<Car>, Task> create(BufferedImage mask, Graphics2D graphics2D, BufferedImage buffer) {
+            return cars -> new Task(mask, graphics2D, buffer, cars);
+        }
+
+        @Override
+        public void run() {
+            try {
+                for (Car car : cars) {
+                    car.tick(buffer);
+
+                    if (car.isCrashed()) {
+                        continue;
                     }
+
+                    // Collision detection
+                    if (doCollisionDetection(car)) {
+                        continue;
+                    }
+
+                    car.calculateDistances(calculateDistance(graphics2D, mask));
                 }
             }
-        }
-        return false;
-    }
-
-    private Function<Line2D.Double, Double> calculateDistance(Graphics2D graphics2D, BufferedImage mask) {
-        return lineOfSight -> {
-            if (Main.DEBUG) {
-                graphics2D.setColor(Color.BLUE);
-                graphics2D.draw(lineOfSight);
+            catch (RuntimeException e) {
+                e.printStackTrace();
             }
-            double minDistance = Double.MAX_VALUE;
-            double distance;
-            for (int x = 0; x != mask.getWidth(); x++) {
-                for (int y = 0; y != mask.getHeight(); y++) {
-                    if (lineOfSight.intersects(x, y, 1, 1)) {
-                        if (mask.getRGB(x ,y) != Color.WHITE.getRGB()) {
-                            if (Main.DEBUG) {
-                                graphics2D.setColor(Color.RED);
-                                graphics2D.draw(new Rectangle(x, y, 1, 1));
-                            }
-                            distance = lineOfSight.getP1().distance(x, y);
-                            if (distance < minDistance) {
-                                minDistance = distance;
-                            }
+        }
+
+        private boolean doCollisionDetection(Car car) {
+            for (int x = (int)car.getShape().getBounds().getX(); x != (int)car.getShape().getBounds().getX() + car.getShape().getBounds().getWidth(); x++) {
+                for (int y = (int)car.getShape().getBounds().getY(); y != (int)car.getShape().getBounds().getY() + car.getShape().getBounds().getHeight(); y++) {
+                    if (car.getShape().contains(x, y)) {
+                        if (mask.getRGB(x, y) != Color.WHITE.getRGB()) {
+                            car.crashed();
+                            return true;
                         }
                     }
                 }
             }
-            return minDistance;
-        };
+            return false;
+        }
+
+        private Function<Line2D.Double, Double> calculateDistance(Graphics2D graphics2D, BufferedImage mask) {
+            return lineOfSight -> {
+                if (Global.DEBUG) {
+                    graphics2D.setColor(Color.BLUE);
+                    graphics2D.draw(lineOfSight);
+                }
+                double minDistance = Double.MAX_VALUE;
+                double distance;
+                for (int x = 0; x != mask.getWidth(); x++) {
+                    for (int y = 0; y != mask.getHeight(); y++) {
+                        if (lineOfSight.intersects(x, y, 1, 1)) {
+                            if (mask.getRGB(x ,y) != Color.WHITE.getRGB()) {
+                                if (Global.DEBUG) {
+                                    graphics2D.setColor(Color.RED);
+                                    graphics2D.draw(new Rectangle(x, y, 1, 1));
+                                }
+                                distance = lineOfSight.getP1().distance(x, y);
+                                if (distance < minDistance) {
+                                    minDistance = distance;
+                                }
+                            }
+                        }
+                    }
+                }
+                return minDistance;
+            };
+        }
+    }
+
+    void paintNow(Graphics g) {
+        g.drawImage(buffer, 0, 0, buffer.getWidth(), buffer.getHeight(), null);
+        Graphics2D graphics = (Graphics2D) buffer.getGraphics();
+        graphics.setBackground(new Color(0, 0, 0, 0));
+        graphics.clearRect(0,0, buffer.getWidth(), buffer.getHeight());
     }
 
     public void clear() {

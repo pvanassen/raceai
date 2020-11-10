@@ -6,9 +6,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public abstract class Game {
+import static nl.pvanassen.raceai.Global.FPS;
 
-    private static final int FPS = 60;
+public abstract class Game {
 
     private static final int TICK_IN_NANOS = (int)((1 / (double) FPS) * 1000 * 1000 * 1000);
 
@@ -46,8 +46,10 @@ public abstract class Game {
 
     private void tickInternal() {
         try {
+            track.tick();
             tick();
-            trackFrame.repaint();
+            track.paintNow(trackFrame.getGraphics());
+            // trackFrame.repaint();
         }
         catch (RuntimeException e) {
             e.printStackTrace();

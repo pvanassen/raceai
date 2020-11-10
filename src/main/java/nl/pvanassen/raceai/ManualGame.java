@@ -14,7 +14,7 @@ public class ManualGame extends Game {
 
     private ManualGame() {
         super(Modus.MANUAL);
-        manual = track.createCar("manual");
+        manual = track.createCar(CarType.createNormal("manual"));
 
         EventQueue.invokeLater(() -> {
             trackFrame.addKeyListener(new KeyAdapter() {

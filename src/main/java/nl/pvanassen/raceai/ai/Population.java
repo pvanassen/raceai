@@ -33,8 +33,9 @@ public class Population {
         }
     }
 
-    public boolean done() {  //check if all the snakes in the population are dead
-        for (CarAI car : cars) {
+    public boolean done() {
+        // Skip best car
+        for (CarAI car : cars.subList(1, cars.size())) {
             if (car.isAlive()) {
                 return false;
             }

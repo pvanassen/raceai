@@ -19,8 +19,6 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
 
     private final NeuralNet neuralNet;
 
-    private final CarAI carAI;
-
     private final int x = 0;
 
     private final int y = 0;
@@ -36,7 +34,6 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
     private final Map<Integer, String> inputLookupMap = Map.of(0, "Speed", 1, "Dir.", 2, "Dist. right", 3, "Dist. ahead", 4, "Dist. left");
 
     DebugPanel(CarAI carAI) {
-        this.carAI = carAI;
         this.neuralNet = carAI.getBrain();
 
         NeuralNetDebugInfo neuralNetDebugInfo = neuralNet.getDebugInfo();
@@ -56,7 +53,6 @@ public class DebugPanel extends JPanel implements BiConsumer<double[], double[]>
         graphics.clearRect(0,0, buffer.getWidth(), buffer.getHeight());
 
         NeuralNetDebugInfo neuralNetDebugInfo = neuralNet.getDebugInfo();
-        System.out.println("Received " + Arrays.toString(vision));
 
         int iNodes = neuralNetDebugInfo.getINodes();
         int hNodes = neuralNetDebugInfo.getHNodes();

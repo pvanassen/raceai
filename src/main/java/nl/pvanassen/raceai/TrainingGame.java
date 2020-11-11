@@ -6,9 +6,9 @@ import nl.pvanassen.raceai.ai.Population;
 
 import java.awt.*;
 
-public class TrainingGame extends Game {
+import static nl.pvanassen.raceai.Global.POPULATION_SIZE;
 
-    private static final int POPULATION_SIZE = 10;
+public class TrainingGame extends Game {
 
     private final DebugFrame debugFrame = new DebugFrame();
 
@@ -29,7 +29,6 @@ public class TrainingGame extends Game {
         population.tick();
         if (population.done()) {
             population.getBest().ifPresent(CarAI::saveBrain);
-            Thread.sleep(1000);
             System.out.println("Done, next round!");
             track.clear();
             population.naturalSelection();

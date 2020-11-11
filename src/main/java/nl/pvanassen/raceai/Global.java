@@ -15,4 +15,6 @@ public class Global {
 
     public static final int FPS = 60;
 
+    public static final int POPULATION_SIZE = 50;
+
 }

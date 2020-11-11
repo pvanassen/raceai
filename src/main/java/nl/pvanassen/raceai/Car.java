@@ -7,10 +7,9 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
-import java.util.function.Function;
+import java.util.List;
 
 import static java.lang.Math.*;
-import java.util.List;
 import static nl.pvanassen.raceai.ImageHelper.loadImage;
 
 public class Car {
@@ -81,12 +80,6 @@ public class Car {
         Graphics2D graphics = (Graphics2D)buffer.getGraphics();
 
         if (crashed) {
-            draw(graphics, CRASHED);
-            return;
-        }
-
-        if (System.currentTimeMillis() - start > 1000 && score == 0) {
-            crashed();
             draw(graphics, CRASHED);
             return;
         }
@@ -199,10 +192,19 @@ public class Car {
         crashed = true;
     }
 
-    void calculateDistances(Function<Line2D.Double, Double> distanceCalculation) {
-        distanceRight = distanceCalculation.apply(lineOfSightRight);
-        distanceAhead = distanceCalculation.apply(lineOfSightAhead);
-        distanceLeft = distanceCalculation.apply(lineOfSightLeft);
+    LinesOfSight getLinesOfSight() {
+        return LinesOfSight.builder()
+                .lineOfSightRight(lineOfSightRight)
+                .lineOfSightAhead(lineOfSightAhead)
+                .lineOfSightLeft(lineOfSightLeft)
+                .linesOfSightDistances(this::recievedDistances)
+                .build();
+    }
+
+    void recievedDistances(LinesOfSightDistances linesOfSightDistances) {
+        distanceRight = linesOfSightDistances.getDistanceRight();
+        distanceAhead = linesOfSightDistances.getDistanceAhead();
+        distanceLeft = linesOfSightDistances.getDistanceLeft();
     }
 
     public CarMetrics getCarMetrics() {

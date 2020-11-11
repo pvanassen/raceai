@@ -3,6 +3,7 @@ package nl.pvanassen.raceai;
 import nl.pvanassen.raceai.ai.CarAI;
 
 import javax.swing.*;
+import java.awt.*;
 
 public class DebugFrame extends JFrame {
 
@@ -14,9 +15,13 @@ public class DebugFrame extends JFrame {
 
     void replaceCar(CarAI newCar) {
         for (int i = 0; i < getComponents().length; i++) {
-            if (getComponent(i) instanceof DebugPanel) {
-                remove(i);
-                break;
+            if (getComponent(i) instanceof JRootPane) {
+                for (Component component : ((JRootPane) getComponent(i)).getContentPane().getComponents()) {
+                    if (component instanceof DebugPanel) {
+                        component.setVisible(false);
+                        ((JRootPane) getComponent(i)).remove(component);
+                    }
+                }
             }
         }
         add(new DebugPanel(newCar));

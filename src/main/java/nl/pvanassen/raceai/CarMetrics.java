@@ -2,9 +2,11 @@ package nl.pvanassen.raceai;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.ToString;
 
 @Getter
 @Builder
+@ToString
 public class CarMetrics {
 
     private final double speed;

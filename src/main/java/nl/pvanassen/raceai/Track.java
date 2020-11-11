@@ -1,21 +1,19 @@
 package nl.pvanassen.raceai;
 
 import com.google.common.collect.Lists;
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-import nl.pvanassen.raceai.ai.Population;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.Line2D;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinTask;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static lombok.AccessLevel.PRIVATE;
@@ -28,6 +26,8 @@ public class Track extends JPanel {
     private final BufferedImage track = loadImage("track1.png");
 
     private final BufferedImage mask = loadImage("track1-mask.png");
+
+    private final List<Point> collisionSet = new LinkedList<>();
 
     private final List<Car> cars = new LinkedList<>();
 
@@ -46,6 +46,16 @@ public class Track extends JPanel {
         setPreferredSize(new Dimension(mask.getWidth(), mask.getHeight()));
         setDoubleBuffered(true);
         buffer = new BufferedImage(mask.getWidth(), mask.getHeight(), BufferedImage.TYPE_INT_ARGB);
+
+        for (int x = 0; x != mask.getWidth(); x++) {
+            for (int y = 0; y != mask.getHeight(); y++) {
+                if (mask.getRGB(x ,y) == Color.WHITE.getRGB()) {
+                    continue;
+                }
+                collisionSet.add(new Point(x, y));
+            }
+        }
+
     }
 
     public Car createCar(CarType id) {
@@ -65,33 +75,35 @@ public class Track extends JPanel {
         }
 
         int partitionSize = (int)Math.ceil(cars.size() / (float)Runtime.getRuntime().availableProcessors());
-        List<ForkJoinTask<?>> tasks = Lists.partition(cars, partitionSize)
+        List<ForkJoinTask<List<LinesOfSight>>> tasks = Lists.partition(cars, partitionSize)
                 .stream()
-                .map(Task.create(mask, graphics2D, buffer))
+                .map(CollisionTask.create(mask, buffer))
                 .map(Global.POOL::submit)
                 .collect(Collectors.toList());
 
-        for (ForkJoinTask<?> task : tasks) {
-            task.join();
-        }
+        List<LinesOfSight> linesOfSight = tasks.stream()
+                .map(ForkJoinTask::join)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        new DistanceTask(buffer, collisionSet, linesOfSight).run();
     }
 
     @RequiredArgsConstructor(access = PRIVATE)
-    private static class Task implements Runnable {
+    private static class CollisionTask implements Callable<List<LinesOfSight>> {
         private final BufferedImage mask;
-
-        private final Graphics2D graphics2D;
 
         private final BufferedImage buffer;
 
         private final List<Car> cars;
 
-        static Function<List<Car>, Task> create(BufferedImage mask, Graphics2D graphics2D, BufferedImage buffer) {
-            return cars -> new Task(mask, graphics2D, buffer, cars);
+        static Function<List<Car>, CollisionTask> create(BufferedImage mask, BufferedImage buffer) {
+            return cars -> new CollisionTask(mask, buffer, cars);
         }
 
         @Override
-        public void run() {
+        public List<LinesOfSight> call() {
+            List<LinesOfSight> linesOfSights = new LinkedList<>();
             try {
                 for (Car car : cars) {
                     car.tick(buffer);
@@ -105,12 +117,13 @@ public class Track extends JPanel {
                         continue;
                     }
 
-                    car.calculateDistances(calculateDistance(graphics2D, mask));
+                    linesOfSights.add(car.getLinesOfSight());
                 }
             }
             catch (RuntimeException e) {
                 e.printStackTrace();
             }
+            return linesOfSights;
         }
 
         private boolean doCollisionDetection(Car car) {
@@ -126,33 +139,70 @@ public class Track extends JPanel {
             }
             return false;
         }
+    }
 
-        private Function<Line2D.Double, Double> calculateDistance(Graphics2D graphics2D, BufferedImage mask) {
-            return lineOfSight -> {
+    @RequiredArgsConstructor
+    private static class DistanceTask implements Runnable {
+        private final BufferedImage buffer;
+
+        private final List<Point> collisionSet;
+
+        private final List<LinesOfSight> linesOfSights;
+
+        @Override
+        public void run() {
+            double distanceLeft;
+            double minDistanceLeft;
+            double distanceAhead;
+            double minDistanceAhead;
+            double distanceRight;
+            double minDistanceRight;
+            for (LinesOfSight linesOfSight : linesOfSights) {
+                minDistanceLeft = Double.MAX_VALUE;
+                minDistanceAhead = Double.MAX_VALUE;
+                minDistanceRight = Double.MAX_VALUE;
                 if (Global.DEBUG) {
+                    Graphics2D graphics2D = (Graphics2D)buffer.getGraphics();
                     graphics2D.setColor(Color.BLUE);
-                    graphics2D.draw(lineOfSight);
+                    graphics2D.draw(linesOfSight.getLineOfSightLeft());
+                    graphics2D.draw(linesOfSight.getLineOfSightAhead());
+                    graphics2D.draw(linesOfSight.getLineOfSightRight());
                 }
-                double minDistance = Double.MAX_VALUE;
-                double distance;
-                for (int x = 0; x != mask.getWidth(); x++) {
-                    for (int y = 0; y != mask.getHeight(); y++) {
-                        if (lineOfSight.intersects(x, y, 1, 1)) {
-                            if (mask.getRGB(x ,y) != Color.WHITE.getRGB()) {
-                                if (Global.DEBUG) {
-                                    graphics2D.setColor(Color.RED);
-                                    graphics2D.draw(new Rectangle(x, y, 1, 1));
-                                }
-                                distance = lineOfSight.getP1().distance(x, y);
-                                if (distance < minDistance) {
-                                    minDistance = distance;
-                                }
-                            }
+                for (Point point : collisionSet) {
+                    if (linesOfSight.getLineOfSightLeft().intersects(point.x, point.y, 1, 1)) {
+                        if (Global.DEBUG) {
+                            buffer.setRGB(point.x, point.y, Color.RED.getRGB());
+                        }
+                        distanceLeft = linesOfSight.getLineOfSightLeft().getP1().distance(point.x, point.y);
+                        if (distanceLeft < minDistanceLeft) {
+                            minDistanceLeft = distanceLeft;
+                        }
+                    }
+                    if (linesOfSight.getLineOfSightAhead().intersects(point.x, point.y, 1, 1)) {
+                        if (Global.DEBUG) {
+                            buffer.setRGB(point.x, point.y, Color.RED.getRGB());
+                        }
+                        distanceAhead = linesOfSight.getLineOfSightAhead().getP1().distance(point.x, point.y);
+                        if (distanceAhead < minDistanceAhead) {
+                            minDistanceAhead = distanceAhead;
+                        }
+                    }
+                    if (linesOfSight.getLineOfSightRight().intersects(point.x, point.y, 1, 1)) {
+                        if (Global.DEBUG) {
+                            buffer.setRGB(point.x, point.y, Color.RED.getRGB());
+                        }
+                        distanceRight = linesOfSight.getLineOfSightRight().getP1().distance(point.x, point.y);
+                        if (distanceRight < minDistanceRight) {
+                            minDistanceRight = distanceRight;
                         }
                     }
                 }
-                return minDistance;
-            };
+                linesOfSight.getLinesOfSightDistances().accept(LinesOfSightDistances.builder()
+                        .distanceAhead(minDistanceAhead)
+                        .distanceLeft(minDistanceLeft)
+                        .distanceRight(minDistanceRight)
+                        .build());
+            }
         }
     }
 

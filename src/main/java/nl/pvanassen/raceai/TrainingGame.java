@@ -4,17 +4,11 @@ import lombok.SneakyThrows;
 import nl.pvanassen.raceai.ai.CarAI;
 import nl.pvanassen.raceai.ai.Population;
 
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class TrainingGame extends Game {
 
-    private static final int POPULATION_SIZE = 50;
+    private static final int POPULATION_SIZE = 10;
 
     private final DebugFrame debugFrame = new DebugFrame();
 

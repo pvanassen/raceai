@@ -2,9 +2,7 @@ package nl.pvanassen.raceai;
 
 import lombok.SneakyThrows;
 import nl.pvanassen.raceai.ai.CarAI;
-import nl.pvanassen.raceai.ai.Population;
 
-import javax.swing.*;
 import java.awt.*;
 import java.io.BufferedReader;
 import java.io.File;
@@ -47,7 +45,7 @@ public class ReplayGame extends Game {
     }
 
     public static void main(String[] args) {
-        new ReplayGame("CarAI-34-1604955841841.json");
+        new ReplayGame("CarAI-6912-1605125346555.json");
     }
 
 }

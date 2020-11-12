@@ -194,6 +194,9 @@ public class Car {
 
     LinesOfSight getLinesOfSight() {
         return LinesOfSight.builder()
+                .x(x)
+                .y(y)
+                .direction(direction)
                 .lineOfSightRight(lineOfSightRight)
                 .lineOfSightAhead(lineOfSightAhead)
                 .lineOfSightLeft(lineOfSightLeft)

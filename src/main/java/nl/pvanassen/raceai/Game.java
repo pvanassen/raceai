@@ -22,7 +22,9 @@ public abstract class Game {
 
     protected Game(Modus modus) {
         this.modus = modus;
+    }
 
+    protected void start() {
         EventQueue.invokeLater(() -> {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());

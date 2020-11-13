@@ -1,19 +1,17 @@
 package nl.pvanassen.raceai;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Line2D;
-import java.awt.geom.Point2D;
+import java.awt.geom.*;
 import java.awt.image.BufferedImage;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinTask;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -30,11 +28,14 @@ public class Track extends JPanel {
 
     private final BufferedImage mask = loadImage("track1-mask.png");
 
-    private final List<Point> collisionSet = new LinkedList<>();
+//    private final List<Point> collisionSet = new LinkedList<>();
 
     private final List<Car> cars = new LinkedList<>();
 
-    private static final Map<LinesOfSight, LinesOfSightDistances> COLLISION_MAP = new ConcurrentHashMap<>(300, 0.75f, Runtime.getRuntime().availableProcessors() * 2);
+    private static final Cache<LinesOfSight, LinesOfSightDistances> CACHE = Caffeine.newBuilder()
+            .maximumSize(1_000_000)
+            .recordStats()
+            .build();
 
     private final List<Line2D> checkpoints = List.of(new Line2D.Float(30, 300, 80, 300),
             new Line2D.Float(300, 360, 300, 410),
@@ -52,18 +53,18 @@ public class Track extends JPanel {
         setDoubleBuffered(true);
         buffer = new BufferedImage(mask.getWidth(), mask.getHeight(), BufferedImage.TYPE_INT_ARGB);
 
-        for (int x = 0; x != mask.getWidth(); x++) {
-            for (int y = 0; y != mask.getHeight(); y++) {
-                if (mask.getRGB(x ,y) == Color.WHITE.getRGB()) {
-                    continue;
-                }
-                collisionSet.add(new Point(x, y));
-            }
-        }
+//        for (int x = 0; x != mask.getWidth(); x++) {
+//            for (int y = 0; y != mask.getHeight(); y++) {
+//                if (mask.getRGB(x ,y) == Color.WHITE.getRGB()) {
+//                    continue;
+//                }
+//                collisionSet.add(new Point(x, y));
+//            }
+//        }
 
     }
 
-    public Car createCar(CarType id) {
+    public synchronized Car createCar(CarType id) {
         Car car = new Car(id, START_LOCATION, checkpoints);
         cars.add(car);
         return car;
@@ -82,7 +83,7 @@ public class Track extends JPanel {
         int partitionSize = (int)Math.ceil(cars.size() / (float)Runtime.getRuntime().availableProcessors());
         List<ForkJoinTask<?>> tasks = Lists.partition(cars, partitionSize)
                 .stream()
-                .map(CollisionTask.create(mask, buffer, collisionSet))
+                .map(CollisionTask.create(mask, buffer))
                 .map(Global.POOL::submit)
                 .collect(Collectors.toList());
 
@@ -98,15 +99,11 @@ public class Track extends JPanel {
 
         private final BufferedImage buffer;
 
-        private final List<Point> collisionSet;
-
-        private final Map<LinesOfSight, LinesOfSightDistances> collisionMap;
-
         private final List<Car> cars;
 
         static Function<List<Car>, CollisionTask> create(
-                BufferedImage mask, BufferedImage buffer, List<Point> collisionSet) {
-            return cars -> new CollisionTask(mask, buffer, collisionSet, Track.COLLISION_MAP, cars);
+                BufferedImage mask, BufferedImage buffer) {
+            return cars -> new CollisionTask(mask, buffer, cars);
         }
 
         @Override
@@ -124,12 +121,9 @@ public class Track extends JPanel {
                         continue;
                     }
 
-//                    calculateDistances(car.getLinesOfSight());
-
-                    LinesOfSight linesOfSight = car.getLinesOfSight();
-                    LinesOfSightDistances linesOfSightDistances = collisionMap.computeIfAbsent(linesOfSight, this::calculateDistancesAlt1);
-
-                    linesOfSight.getLinesOfSightDistances().accept(linesOfSightDistances);
+                    LinesOfSightWithCallback linesOfSightWithCallback = car.getLinesOfSight();
+                    LinesOfSightDistances linesOfSightDistances = CACHE.get(linesOfSightWithCallback.getLinesOfSight(), this::calculateDistancesAlt1);
+                    linesOfSightWithCallback.getLinesOfSightDistances().accept(linesOfSightDistances);
                 }
             }
             catch (RuntimeException e) {
@@ -138,15 +132,17 @@ public class Track extends JPanel {
         }
 
         private boolean doCollisionDetection(Car car) {
-            for (int x = (int)car.getShape().getBounds().getX(); x != (int)car.getShape().getBounds().getX() + car.getShape().getBounds().getWidth(); x++) {
-                for (int y = (int)car.getShape().getBounds().getY(); y != (int)car.getShape().getBounds().getY() + car.getShape().getBounds().getHeight(); y++) {
-                    if (car.getShape().contains(x, y)) {
-                        if (mask.getRGB(x, y) != Color.WHITE.getRGB()) {
-                            car.crashed();
-                            return true;
-                        }
-                    }
+            AffineTransform affineTransform = new AffineTransform();
+            Shape shape = car.getShape();
+            double[] points = new double[2];
+            PathIterator pathIterator = ((Path2D.Double)shape).getPathIterator(affineTransform);
+            while (!pathIterator.isDone()) {
+                pathIterator.currentSegment(points);
+                if (mask.getRGB((int)points[0], (int)points[1]) != Color.WHITE.getRGB()) {
+                    car.crashed();
+                    return true;
                 }
+                pathIterator.next();
             }
             return false;
         }
@@ -215,56 +211,6 @@ public class Track extends JPanel {
             }
             return Integer.MAX_VALUE;
         }
-
-        private void calculateDistances(LinesOfSight linesOfSight) {
-            double distanceLeft;
-            double minDistanceLeft = Double.MAX_VALUE;
-            double distanceAhead;
-            double minDistanceAhead = Double.MAX_VALUE;
-            double distanceRight;
-            double minDistanceRight = Double.MAX_VALUE;
-            if (Global.DEBUG) {
-                Graphics2D graphics2D = (Graphics2D)buffer.getGraphics();
-                graphics2D.setColor(Color.BLUE);
-                graphics2D.draw(linesOfSight.getLineOfSightLeft());
-                graphics2D.draw(linesOfSight.getLineOfSightAhead());
-                graphics2D.draw(linesOfSight.getLineOfSightRight());
-            }
-            for (Point point : collisionSet) {
-                if (linesOfSight.getLineOfSightLeft().intersects(point.x, point.y, 1, 1)) {
-                    if (Global.DEBUG) {
-                        buffer.setRGB(point.x, point.y, Color.RED.getRGB());
-                    }
-                    distanceLeft = linesOfSight.getLineOfSightLeft().getP1().distance(point.x, point.y);
-                    if (distanceLeft < minDistanceLeft) {
-                        minDistanceLeft = distanceLeft;
-                    }
-                }
-                if (linesOfSight.getLineOfSightAhead().intersects(point.x, point.y, 1, 1)) {
-                    if (Global.DEBUG) {
-                        buffer.setRGB(point.x, point.y, Color.RED.getRGB());
-                    }
-                    distanceAhead = linesOfSight.getLineOfSightAhead().getP1().distance(point.x, point.y);
-                    if (distanceAhead < minDistanceAhead) {
-                        minDistanceAhead = distanceAhead;
-                    }
-                }
-                if (linesOfSight.getLineOfSightRight().intersects(point.x, point.y, 1, 1)) {
-                    if (Global.DEBUG) {
-                        buffer.setRGB(point.x, point.y, Color.RED.getRGB());
-                    }
-                    distanceRight = linesOfSight.getLineOfSightRight().getP1().distance(point.x, point.y);
-                    if (distanceRight < minDistanceRight) {
-                        minDistanceRight = distanceRight;
-                    }
-                }
-            }
-            linesOfSight.getLinesOfSightDistances().accept(LinesOfSightDistances.builder()
-                    .distanceAhead(minDistanceAhead)
-                    .distanceLeft(minDistanceLeft)
-                    .distanceRight(minDistanceRight)
-                    .build());
-        }
     }
 
     void paintNow(Graphics g) {
@@ -275,6 +221,7 @@ public class Track extends JPanel {
     }
 
     public void clear() {
+        System.out.println("Cache stats: " + CACHE.stats());
         cars.clear();
     }
 }

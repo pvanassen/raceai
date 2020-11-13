@@ -1,17 +1,24 @@
 package nl.pvanassen.raceai.ai;
 
 import com.google.common.collect.Lists;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import nl.pvanassen.raceai.Global;
 import nl.pvanassen.raceai.Track;
+import org.checkerframework.common.value.qual.IntRange;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static java.util.stream.Collectors.toList;
 
 public class Population {
 
@@ -45,12 +52,19 @@ public class Population {
 
     @SneakyThrows
     public void tick() {
-        int partitionSize = (int)Math.ceil(cars.size() / (float)Runtime.getRuntime().availableProcessors());
-        List<ForkJoinTask<?>> tasks = Lists.partition(cars, partitionSize)
+        List<CarAI> aliveCars =  cars.stream()
+                .filter(CarAI::isAlive)
+                .collect(toList());
+        if (cars.isEmpty()) {
+            return;
+        }
+
+        int partitionSize = Math.max(1, (int)Math.ceil(aliveCars.size() / (float)Runtime.getRuntime().availableProcessors()));
+        List<ForkJoinTask<?>> tasks = Lists.partition(aliveCars, partitionSize)
                 .stream()
                 .map(Task::new)
                 .map(Global.POOL::submit)
-                .collect(Collectors.toList());
+                .collect(toList());
 
         for (ForkJoinTask<?> task : tasks) {
             task.join();
@@ -71,9 +85,7 @@ public class Population {
         @Override
         public void run() {
             try {
-                cars.stream()
-                        .filter(CarAI::isAlive)
-                        .forEach(CarAI::calculate);
+                cars.forEach(CarAI::calculate);
             }
             catch (RuntimeException e) {
                 e.printStackTrace();
@@ -117,14 +129,25 @@ public class Population {
                 .orElseThrow();
     }
 
-    private CarAI selectRandomParent() {  //selects a random number in range of the fitnesssum and if a car falls in that range then select it
-        return cars.stream()
-                .sorted(Comparator.comparing(CarAI::calculateFitness))
-                .min((o1, o2) -> ThreadLocalRandom.current().nextInt(3) - 1)
-                .orElseThrow();
+    private CarAI selectRandomParent(List<CarAI> cars) {  //selects a random number in range of the fitnesssum and if a car falls in that range then select it
+        double rand = ThreadLocalRandom.current().nextDouble() * calculateFitnessSum();
+        float summation = 0;
+        for (CarAI car : cars) {
+            summation += car.calculateFitness();
+            if (summation > rand) {
+                return car;
+            }
+        }
+        return cars.get(0);
     }
 
+    @SneakyThrows
     public void naturalSelection() {
+        List<CarAI> top10Cars = cars.stream()
+                .sorted(Comparator.comparing(CarAI::calculateFitness))
+                .limit((int) (cars.size() * 0.1f))
+                .collect(toList());;
+
         List<CarAI> newCars = new ArrayList<>(cars.size());
 
         newCars.add(getBest()
@@ -141,17 +164,23 @@ public class Population {
             mutationRate = 0.01f;
         }
 
-        // Take top 10% and cross breed?
+        ForkJoinTask<List<CarAI>> forkJoinTask = Global.POOL.submit(() -> IntStream.rangeClosed(1, cars.size() - 1)
+                .parallel()
+                .mapToObj(it -> selectRandomParent(cars).crossoverAndMutate(selectRandomParent(cars), mutationRate))
+                .collect(toList()));
 
-        for (int i = 1; i < cars.size(); i++) {
-            CarAI child = selectRandomParent().crossoverAndMutate(selectRandomParent(), mutationRate);
-            newCars.add(child);
-        }
+        newCars.addAll(forkJoinTask.get());
+
+//        for (int i = 1; i < cars.size(); i++) {
+//            CarAI child = selectRandomParent(cars).crossoverAndMutate(selectRandomParent(cars), mutationRate);
+//            newCars.add(child);
+//        }
+
         cars.clear();
         cars.addAll(newCars);
         gen += 1;
     }
-//
+
 //    public void mutate() {
 //        for (Snake snake : snakes) {
 //            snake.mutate();

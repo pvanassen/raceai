@@ -17,11 +17,12 @@ public class TrainingGame extends Game {
     private TrainingGame() {
         super(Modus.TRAINING);
         population = new Population(track, POPULATION_SIZE);
-        EventQueue.invokeLater(() -> {
-            if (Global.DEBUG) {
+        if (Global.DEBUG) {
+            EventQueue.invokeLater(() -> {
                 debugFrame.replaceCar(population.getFirstCar());
-            }
-        });
+            });
+        }
+        start();
     }
 
     @SneakyThrows

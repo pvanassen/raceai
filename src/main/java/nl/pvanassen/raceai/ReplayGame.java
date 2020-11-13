@@ -27,6 +27,7 @@ public class ReplayGame extends Game {
                 debugFrame.replaceCar(carAI);
             }
         });
+        start();
     }
 
     @SneakyThrows

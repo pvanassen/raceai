@@ -5,7 +5,6 @@ import lombok.Getter;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Line2D;
-import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
@@ -28,6 +27,8 @@ public class Car {
 
     private final List<Line2D> checkpoints;
 
+    private Line2D nextCheckpoint;
+
     @Getter
     private boolean crashed = false;
 
@@ -44,12 +45,6 @@ public class Car {
 
     @Getter
     private double score;
-
-    private Line2D.Double lineOfSightRight;
-
-    private Line2D.Double lineOfSightAhead;
-
-    private Line2D.Double lineOfSightLeft;
 
     private double distanceRight;
 
@@ -69,7 +64,7 @@ public class Car {
 
     Car(CarType carType, Point startLocation, List<Line2D> checkpoints) {
         this.checkpoints = checkpoints;
-
+        nextCheckpoint = checkpoints.get(0);
         x = startLocation.x;
         y = startLocation.y;
         this.id = "Car-" + carType.getId();
@@ -84,7 +79,13 @@ public class Car {
             return;
         }
 
-        if (System.currentTimeMillis() - start > 2000 && speed == 0) {
+        if (System.currentTimeMillis() - start > 5000 && speed == 0) {
+            crashed();
+            draw(graphics, CRASHED);
+            return;
+        }
+
+        if (System.currentTimeMillis() - start > 10000 && checkpoints.indexOf(nextCheckpoint) < 2) {
             crashed();
             draw(graphics, CRASHED);
             return;
@@ -97,10 +98,13 @@ public class Car {
         }
 
         if (speed > 0) {
-            for (Line2D checkpoint : checkpoints) {
-                if (checkpoint.ptLineDist(x, y) < 0.1d) {
-                    score += 500;
+            if (nextCheckpoint.ptLineDist(x, y) < 0.1d) {
+                score += 500;
+                int pos = checkpoints.indexOf(nextCheckpoint);
+                if (pos == checkpoints.size() - 1) {
+                    pos = 0;
                 }
+                nextCheckpoint = checkpoints.get(pos);
             }
         }
 
@@ -133,24 +137,11 @@ public class Car {
 
         at.translate(10, 5);
 
-        lineOfSightRight = getLine(45, at);
-        lineOfSightAhead = getLine(0, at);
-        lineOfSightLeft = getLine(-45, at);
-
         if (Global.DEBUG) {
             graphics.setColor(Color.BLUE);
             graphics.setFont(graphics.getFont().deriveFont(16f));
             graphics.drawString(id, (int) x, (int) y);
         }
-    }
-
-    private Line2D.Double getLine(double direction, AffineTransform at) {
-        double endX = cos(toRadians(direction)) * DEFAULT_LINE_OF_SIGHT;
-        double endY = sin(toRadians(direction)) * DEFAULT_LINE_OF_SIGHT;
-        Line2D.Double line = new Line2D.Double(0, 0, endX, endY);
-        Point2D.Double pt1 = (Point2D.Double)at.transform(line.getP1(), null);
-        Point2D.Double pt2 = (Point2D.Double)at.transform(line.getP2(), null);
-        return new Line2D.Double(pt1, pt2);
     }
 
     public void action(Accelerate accelerate, Turn turn) {
@@ -192,14 +183,13 @@ public class Car {
         crashed = true;
     }
 
-    LinesOfSight getLinesOfSight() {
-        return LinesOfSight.builder()
-                .x(x)
-                .y(y)
-                .direction(direction)
-                .lineOfSightRight(lineOfSightRight)
-                .lineOfSightAhead(lineOfSightAhead)
-                .lineOfSightLeft(lineOfSightLeft)
+    LinesOfSightWithCallback getLinesOfSight() {
+        return LinesOfSightWithCallback.builder()
+                .linesOfSight(LinesOfSight.builder()
+                        .x((int)x)
+                        .y((int)y)
+                        .direction((int)direction)
+                        .build())
                 .linesOfSightDistances(this::recievedDistances)
                 .build();
     }

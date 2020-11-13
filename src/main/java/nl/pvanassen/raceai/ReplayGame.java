@@ -46,7 +46,7 @@ public class ReplayGame extends Game {
     }
 
     public static void main(String[] args) {
-        new ReplayGame("CarAI-6912-1605125346555.json");
+        new ReplayGame("deze-kan-een-rondje.json");
     }
 
 }

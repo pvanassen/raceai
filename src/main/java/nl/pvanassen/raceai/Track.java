@@ -37,8 +37,9 @@ public class Track extends JPanel {
             .recordStats()
             .build();
 
-    private final List<Line2D> checkpoints = List.of(new Line2D.Float(30, 300, 80, 300),
+    private final List<Line2D> checkpoints = List.of(
             new Line2D.Float(300, 360, 300, 410),
+            new Line2D.Float(30, 300, 80, 300),
             new Line2D.Float(240, 190, 240, 240),
             new Line2D.Float(380, 120, 430, 150),
             new Line2D.Float(605, 65, 580, 120),
@@ -78,6 +79,10 @@ public class Track extends JPanel {
         if (Global.DEBUG) {
             graphics2D.setColor(Color.BLUE);
             checkpoints.forEach(graphics2D::draw);
+            for (int i = 0; i < checkpoints.size(); i++) {
+                Point2D pt1 = checkpoints.get(i).getP1();
+                graphics2D.drawString("Checkpoint " + i, (int)pt1.getX(), (int)pt1.getY());
+            }
         }
 
         int partitionSize = (int)Math.ceil(cars.size() / (float)Runtime.getRuntime().availableProcessors());

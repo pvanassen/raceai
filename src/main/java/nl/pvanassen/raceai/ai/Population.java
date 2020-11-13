@@ -1,23 +1,19 @@
 package nl.pvanassen.raceai.ai;
 
 import com.google.common.collect.Lists;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import nl.pvanassen.raceai.Global;
 import nl.pvanassen.raceai.Track;
-import org.checkerframework.common.value.qual.IntRange;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinTask;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.toList;
 
 public class Population {
@@ -93,7 +89,11 @@ public class Population {
         }
     }
 
-    public Optional<CarAI> getBest() {  //set the best snake of the generation
+    public Optional<CarAI> getBest() {
+        return getBest(false);
+    }
+
+    public Optional<CarAI> getBest(boolean reevaluateRoundsWithNoFitnessIncrease) {
         double max = 0;
         int maxIndex = 0;
         for (int i = 0; i < cars.size(); i++) {
@@ -109,24 +109,18 @@ public class Population {
             bestFitness = max;
             bestScore = (int)cars.get(maxIndex).getScore();
             bestCar = cars.get(maxIndex);
-            roundsWithNoFitnessIncrease = 0;
-            System.out.println("Fitness increase!");
+            if (reevaluateRoundsWithNoFitnessIncrease) {
+                roundsWithNoFitnessIncrease = 0;
+                System.out.println("Fitness increase!");
+            }
             System.out.println("New best car: " + bestCar.getId());
         }
-        else {
+        else if (reevaluateRoundsWithNoFitnessIncrease) {
             System.out.println("No fitness increase");
             roundsWithNoFitnessIncrease++;
         }
         return Optional.ofNullable(bestCar)
                 .map(CarAI::cloneForReplay);
-    }
-
-    private CarAI selectFromTop10() {
-        return cars.stream()
-                .sorted(Comparator.comparing(CarAI::calculateFitness))
-                .limit((int) (cars.size() * 0.1f))
-                .min((o1, o2) -> ThreadLocalRandom.current().nextInt(3) - 1)
-                .orElseThrow();
     }
 
     private CarAI selectRandomParent(List<CarAI> cars) {  //selects a random number in range of the fitnesssum and if a car falls in that range then select it
@@ -143,30 +137,42 @@ public class Population {
 
     @SneakyThrows
     public void naturalSelection() {
-        List<CarAI> top10Cars = cars.stream()
-                .sorted(Comparator.comparing(CarAI::calculateFitness))
-                .limit((int) (cars.size() * 0.1f))
-                .collect(toList());;
 
         List<CarAI> newCars = new ArrayList<>(cars.size());
 
-        newCars.add(getBest()
+        newCars.add(getBest(true)
                 .orElseGet(this::getRandomCar));
 
+        int takeTop;
         float mutationRate;
-        if (roundsWithNoFitnessIncrease > 10) {
+        if (roundsWithNoFitnessIncrease > 20) {
+            mutationRate = 0.9f;
+            takeTop = 80;
+        }
+        else if (roundsWithNoFitnessIncrease > 10) {
             mutationRate = 0.5f;
+            takeTop = 50;
         }
         else if (roundsWithNoFitnessIncrease > 5) {
             mutationRate = 0.1f;
+            takeTop = 10;
         }
         else {
+            takeTop = 1;
             mutationRate = 0.01f;
         }
 
+        List<CarAI> carsToSelectFrom = cars.stream()
+                .sorted(comparing(CarAI::calculateFitness).reversed())
+                .limit((int) (cars.size() * (takeTop / 100f)))
+                .collect(toList());;
+
+        System.out.println("Mutation rate: " + mutationRate);
+        System.out.println("Using top : " + takeTop + "%");
+
         ForkJoinTask<List<CarAI>> forkJoinTask = Global.POOL.submit(() -> IntStream.rangeClosed(1, cars.size() - 1)
                 .parallel()
-                .mapToObj(it -> selectRandomParent(cars).crossoverAndMutate(selectRandomParent(cars), mutationRate))
+                .mapToObj(it -> selectRandomParent(carsToSelectFrom).crossoverAndMutate(selectRandomParent(carsToSelectFrom), mutationRate))
                 .collect(toList()));
 
         newCars.addAll(forkJoinTask.get());

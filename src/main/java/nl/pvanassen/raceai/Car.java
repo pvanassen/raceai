@@ -23,7 +23,6 @@ public class Car {
     private static final double MAX_ACCELERATION = 0.1;
     private static final double MAX_DECELERATION = 0.2;
     private static final double MAX_TURN = 4;
-    private static final int DEFAULT_LINE_OF_SIGHT = 1000;
 
     private final List<Line2D> checkpoints;
 
@@ -52,7 +51,7 @@ public class Car {
 
     private double distanceLeft;
 
-    private final long start = System.currentTimeMillis();
+    private long start = Long.MIN_VALUE;
 
     @Getter
     private long lifetime;
@@ -61,6 +60,8 @@ public class Car {
     private final String id;
 
     private final boolean best;
+
+    private boolean lapComplete = false;
 
     Car(CarType carType, Point startLocation, List<Line2D> checkpoints) {
         this.checkpoints = checkpoints;
@@ -72,6 +73,9 @@ public class Car {
     }
 
     public void tick(BufferedImage buffer) {
+        if (start == Long.MIN_VALUE) {
+            start = System.currentTimeMillis();
+        }
         Graphics2D graphics = (Graphics2D)buffer.getGraphics();
 
         if (crashed) {
@@ -85,7 +89,7 @@ public class Car {
             return;
         }
 
-        if (System.currentTimeMillis() - start > 10000 && checkpoints.indexOf(nextCheckpoint) < 2) {
+        if (System.currentTimeMillis() - start > 10000 && checkpoints.indexOf(nextCheckpoint) < 2 && !lapComplete) {
             crashed();
             draw(graphics, CRASHED);
             return;
@@ -98,11 +102,12 @@ public class Car {
         }
 
         if (speed > 0) {
-            if (nextCheckpoint.ptLineDist(x, y) < 0.1d) {
+            if (nextCheckpoint.ptLineDist(x, y) < 10d) {
                 score += 500;
-                int pos = checkpoints.indexOf(nextCheckpoint);
-                if (pos == checkpoints.size() - 1) {
+                int pos = checkpoints.indexOf(nextCheckpoint) + 1;
+                if (pos == checkpoints.size()) {
                     pos = 0;
+                    lapComplete = true;
                 }
                 nextCheckpoint = checkpoints.get(pos);
             }

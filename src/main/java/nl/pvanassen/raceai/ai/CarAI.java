@@ -17,9 +17,9 @@ import static nl.pvanassen.raceai.CarType.createNormal;
 @Getter
 public class CarAI {
 
-    private static final int LAYERS = 2;
+    private static final int LAYERS = 3;
 
-    private static final int NODES = 4;
+    private static final int NODES = 6;
 
     private static final AtomicInteger carNumber = new AtomicInteger(0);
 
@@ -42,7 +42,6 @@ public class CarAI {
         this.id = "CarAI-" + carNumber.getAndIncrement();
         this.car = carProducer.apply(createNormal(this.id));
         brain = new NeuralNet(5, NODES, 9, LAYERS, "net-" + car.getId());
-        System.out.println("CarAI: " + id + ", car: " + car.getId() + ", brain: " + brain.getId());
     }
 
     public CarAI(Function<CarType, Car> carProducer, String id, String json) {
